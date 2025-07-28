@@ -15,8 +15,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Upload, X } from "lucide-react";
+import Image from "next/image";
 
-import LogoUpload from "./LogoUpload";
 import ServicesInput from "./ServicesInput";
 import SubmitButton from "./SubmitButton";
 
@@ -26,7 +28,7 @@ const formSchema = z.object({
   description: z
     .string()
     .min(10, { message: "Description must be at least 10 characters" }),
-  logo: z.instanceof(File).optional(),
+  logo: z.instanceof(File, { message: "Logo is required" }),
   services: z
     .array(z.string())
     .min(1, { message: "At least one service is required" }),
@@ -53,6 +55,35 @@ export default function CompanyForm() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const services = watch("services");
+
+  const [logo, setLogo] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB limit
+        toast.error("File too large. Please select an image under 5MB");
+        return;
+      }
+      setLogo(file);
+      setValue("logo", file, { shouldValidate: true });
+
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setLogoPreview(previewUrl);
+    }
+  };
+
+  const removeLogo = () => {
+    setLogo(null);
+    setValue("logo", null);
+    if (logoPreview) {
+      URL.revokeObjectURL(logoPreview);
+      setLogoPreview(null);
+    }
+  };
 
   const onSubmit = async (data) => {
     try {
@@ -117,7 +148,6 @@ export default function CompanyForm() {
               {...register("companyName")}
               placeholder="Enter your company name"
               className="border-blue-100 focus:border-blue-200"
-              required
             />
             {errors.companyName && (
               <p className="text-red-500 text-sm">
@@ -136,7 +166,6 @@ export default function CompanyForm() {
                 {...register("email")}
                 placeholder="contact@company.com"
                 className="border-blue-100 focus:border-blue-200"
-                required
               />
               {errors.email && (
                 <p className="text-red-500 text-sm">{errors.email.message}</p>
@@ -145,7 +174,69 @@ export default function CompanyForm() {
           </div>
 
           {/* Logo Upload */}
-          <LogoUpload setValue={setValue} />
+          <div className="space-y-2">
+            <Label htmlFor="logo">Company Logo *</Label>
+            <div className="border-2 border-dashed border-blue-100 rounded-lg p-6 text-center hover:border-blue-200 transition-colors">
+              <input
+                id="logo"
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
+
+              {logoPreview ? (
+                <div className="flex flex-col items-center">
+                  <div className="relative w-48 h-48 mb-4 mx-auto">
+                    <Image
+                      src={logoPreview}
+                      alt="Logo preview"
+                      fill
+                      className="object-contain rounded-md"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById("logo")?.click()}
+                      className="border-blue-100 hover:border-blue-200 cursor-pointer text-blue-600 hover:text-blue-500 hover:bg-blue-100 transition-all duration-200"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Change Logo
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={removeLogo}
+                      className="border-red-100 hover:border-red-200 cursor-pointer text-red-600 hover:text-red-500 hover:bg-red-100 transition-all duration-200"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById("logo")?.click()}
+                    className="border-blue-100 hover:border-blue-200 cursor-pointer text-blue-600 hover:text-blue-500 hover:bg-blue-100 transition-all duration-200"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Logo
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Max file size: 5MB. Supported formats: JPG, PNG, SVG
+                  </p>
+                </>
+              )}
+            </div>
+            {errors.logo && (
+              <p className="text-red-500 text-sm">{errors.logo.message}</p>
+            )}
+          </div>
 
           {/* Description */}
           <div className="space-y-2">
@@ -155,7 +246,6 @@ export default function CompanyForm() {
               {...register("description")}
               placeholder="Describe your company, what you do, and what makes you unique..."
               className="min-h-[120px] border-blue-100 focus:border-blue-200"
-              required
             />
             {errors.description && (
               <p className="text-red-500 text-sm">
@@ -166,7 +256,7 @@ export default function CompanyForm() {
 
           {/* Services */}
           <ServicesInput services={services} setValue={setValue} />
-          {errors.services && (
+          {errors.services && services.length === 0 && (
             <p className="text-red-500 text-sm">{errors.services.message}</p>
           )}
 
