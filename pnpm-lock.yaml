@@ -23,6 +23,9 @@ importers:
       '@sanity/vision':
         specifier: '3'
         version: 3.99.0(@babel/runtime@7.28.2)(@codemirror/lint@6.8.5)(@codemirror/theme-one-dark@6.1.3)(@emotion/is-prop-valid@1.2.2)(codemirror@6.0.2)(react-dom@19.1.0(react@19.1.0))(react-is@18.3.1)(react@19.1.0)(styled-components@6.1.19(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
+      '@sanity/webhook':
+        specifier: ^4.0.4
+        version: 4.0.4
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -1886,6 +1889,10 @@ packages:
         optional: true
       svelte:
         optional: true
+
+  '@sanity/webhook@4.0.4':
+    resolution: {integrity: sha512-c8LmzR5Wx93zJ10ohhp0XlmPrTNSFyvPcLbNY/sN45Wj5VOngz4FbBMbX9j64sSQLt+676U6OhiVfjs1yw3YCw==}
+    engines: {node: '>=20.0.0'}
 
   '@selderee/plugin-htmlparser2@0.11.0':
     resolution: {integrity: sha512-P33hHGdldxGabLFjPPpaTxVolMrzrcegejx+0GxjrIb9Zv48D8yAIA/QTDR2dFl7Uz7urX8aX6+5bCZslr+gWQ==}
@@ -7368,6 +7375,8 @@ snapshots:
       - '@sanity/types'
       - debug
       - typescript
+
+  '@sanity/webhook@4.0.4': {}
 
   '@selderee/plugin-htmlparser2@0.11.0':
     dependencies:
