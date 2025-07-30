@@ -68,34 +68,6 @@ export default function FormSkeleton() {
           <div className="h-12 w-full bg-blue-200 rounded-md"></div>
         </CardContent>
       </Card>
-
-      {/* Info Card Skeleton */}
-      <Card className="bg-blue-50 border-blue-100 animate-pulse">
-        <CardContent className="pt-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-6 w-6 rounded-full bg-blue-200"></div>
-            <div className="h-5 w-40 bg-blue-200 rounded"></div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="h-4 w-full bg-blue-100 rounded"></div>
-            <div className="h-4 w-5/6 bg-blue-100 rounded"></div>
-            <div className="h-4 w-4/6 bg-blue-100 rounded"></div>
-          </div>
-
-          <div className="mt-6 space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-start gap-2">
-                <div className="h-5 w-5 rounded-full bg-blue-200 mt-1"></div>
-                <div className="flex-1">
-                  <div className="h-4 w-full bg-blue-100 rounded mb-1"></div>
-                  <div className="h-4 w-5/6 bg-blue-100 rounded"></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </>
   );
 }

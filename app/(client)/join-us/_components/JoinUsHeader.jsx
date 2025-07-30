@@ -1,7 +1,8 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Building2, Star, Zap, Crown } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 const planIcons = {
   free: Star,
@@ -17,13 +18,43 @@ const planDescriptions = {
     "Our Enterprise plan offers premium placement, unlimited services, and dedicated 24/7 support for large organizations.",
 };
 
-export default function JoinUsHeader({
-  title = "Join Our Business Directory",
-  plan = "free",
-}) {
+const planTitles = {
+  free: "Join Our Free Directory",
+  professional: "Start Your Professional Membership",
+  enterprise: "Enterprise Membership Application",
+};
+
+// Skeleton for the header during loading
+function HeaderSkeleton() {
+  return (
+    <>
+      <div className="flex items-center gap-4 mb-8">
+        <div className="h-10 w-32 bg-blue-50 rounded animate-pulse"></div>
+        <div className="h-10 w-32 bg-blue-50 rounded animate-pulse ml-auto"></div>
+      </div>
+
+      <div className="text-center mb-12">
+        <div className="h-8 w-40 bg-blue-100 rounded-full mx-auto mb-4 animate-pulse"></div>
+        <div className="h-10 w-72 bg-gray-200 rounded mx-auto mb-4 animate-pulse"></div>
+        <div className="h-6 w-full max-w-md bg-gray-100 rounded mx-auto animate-pulse"></div>
+      </div>
+    </>
+  );
+}
+
+// Content component that uses useSearchParams
+function HeaderContent() {
   const router = useRouter();
-  const PlanIcon = planIcons[plan] || Building2;
-  const description = planDescriptions[plan] || planDescriptions.free;
+  const searchParams = useSearchParams();
+  const planParam = searchParams.get("plan") || "free";
+
+  // Validate plan parameter
+  const validPlans = ["free", "professional", "enterprise"];
+  const validPlan = validPlans.includes(planParam) ? planParam : "free";
+
+  const PlanIcon = planIcons[validPlan] || Building2;
+  const description = planDescriptions[validPlan] || planDescriptions.free;
+  const title = planTitles[validPlan] || planTitles.free;
 
   return (
     <>
@@ -48,17 +79,17 @@ export default function JoinUsHeader({
       <div className="text-center mb-12">
         <div
           className={`inline-flex items-center gap-2 ${
-            plan === "professional"
+            validPlan === "professional"
               ? "bg-blue-100 text-blue-600"
-              : plan === "enterprise"
+              : validPlan === "enterprise"
                 ? "bg-indigo-100 text-indigo-600"
                 : "bg-blue-100 text-blue-600"
           } px-4 py-2 rounded-full text-sm font-medium mb-4`}
         >
           <PlanIcon className="h-4 w-4" />
-          {plan === "free"
+          {validPlan === "free"
             ? "Free Starter Plan"
-            : plan === "professional"
+            : validPlan === "professional"
               ? "Professional Plan"
               : "Enterprise Plan"}
         </div>
@@ -66,9 +97,9 @@ export default function JoinUsHeader({
           {title.split(" ").slice(0, -1).join(" ")}{" "}
           <span
             className={`bg-gradient-to-r ${
-              plan === "professional"
+              validPlan === "professional"
                 ? "from-blue-500 to-blue-600"
-                : plan === "enterprise"
+                : validPlan === "enterprise"
                   ? "from-indigo-500 to-indigo-600"
                   : "from-blue-500 to-blue-600"
             } bg-clip-text text-transparent`}
@@ -81,5 +112,14 @@ export default function JoinUsHeader({
         </p>
       </div>
     </>
+  );
+}
+
+// Main component with Suspense
+export default function JoinUsHeader() {
+  return (
+    <Suspense fallback={<HeaderSkeleton />}>
+      <HeaderContent />
+    </Suspense>
   );
 }

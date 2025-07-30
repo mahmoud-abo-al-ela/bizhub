@@ -1,5 +1,9 @@
+"use client";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle, Clock, Zap } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 const planInfo = {
   free: {
@@ -25,8 +29,37 @@ const planInfo = {
   },
 };
 
-export default function InfoCard({ plan = "free" }) {
-  const info = planInfo[plan] || planInfo.free;
+// Skeleton for the info card during loading
+function InfoCardSkeleton() {
+  return (
+    <div className="mt-8 text-center">
+      <Card className="bg-blue-50 border-blue-100 animate-pulse">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-center mb-3">
+            <div className="h-9 w-9 rounded-full bg-blue-200"></div>
+          </div>
+          <div className="h-6 w-48 bg-blue-200 rounded mx-auto mb-3"></div>
+          <div className="space-y-2">
+            <div className="h-4 w-full bg-blue-100 rounded"></div>
+            <div className="h-4 w-5/6 bg-blue-100 rounded mx-auto"></div>
+            <div className="h-4 w-4/6 bg-blue-100 rounded mx-auto"></div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Content component that uses useSearchParams
+function InfoCardContent() {
+  const searchParams = useSearchParams();
+  const planParam = searchParams.get("plan") || "free";
+
+  // Validate plan parameter
+  const validPlans = ["free", "professional", "enterprise"];
+  const validPlan = validPlans.includes(planParam) ? planParam : "free";
+
+  const info = planInfo[validPlan] || planInfo.free;
   const InfoIcon = info.icon;
 
   return (
@@ -41,10 +74,10 @@ export default function InfoCard({ plan = "free" }) {
           <h3 className="font-semibold mb-2">{info.title}</h3>
           <p className="text-sm text-muted-foreground">{info.description}</p>
 
-          {plan !== "free" && (
+          {validPlan !== "free" && (
             <div className="mt-4 pt-4 border-t border-blue-200">
               <p className="text-sm font-medium text-blue-600">
-                {plan === "professional"
+                {validPlan === "professional"
                   ? "14-day free trial included"
                   : "Custom onboarding included"}
               </p>
@@ -53,5 +86,14 @@ export default function InfoCard({ plan = "free" }) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Main component with Suspense
+export default function InfoCard() {
+  return (
+    <Suspense fallback={<InfoCardSkeleton />}>
+      <InfoCardContent />
+    </Suspense>
   );
 }
