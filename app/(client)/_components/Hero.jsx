@@ -37,7 +37,7 @@ const Hero = () => {
             <Button
               size="lg"
               className="bg-blue-500 hover:bg-blue-400 text-white shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer"
-              onClick={() => router.push("/join-us")}
+              onClick={() => router.push("/membership")}
             >
               List Your Business
               <ArrowRight className="ml-2 h-5 w-5" />

@@ -4,15 +4,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Plus, X } from "lucide-react";
+import { Plus, X, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
-export default function ServicesInput({ services, setValue }) {
+export default function ServicesInput({
+  services,
+  setValue,
+  maxServices = Infinity,
+  planName = "Free Starter",
+}) {
   const [newService, setNewService] = useState("");
   const [isAddingService, setIsAddingService] = useState(false);
 
   const addService = () => {
     setIsAddingService(true);
+    if (services.length >= maxServices) {
+      toast.error(
+        `${planName} plan allows a maximum of ${maxServices} services`
+      );
+      setIsAddingService(false);
+      return;
+    }
+
     if (newService.trim() && !services.includes(newService.trim())) {
       setValue("services", [...services, newService.trim()]);
       setNewService("");
@@ -33,9 +46,18 @@ export default function ServicesInput({ services, setValue }) {
     toast.info(`"${service}" removed`);
   };
 
+  const remainingServices = maxServices - services.length;
+
   return (
     <div className="space-y-4">
-      <Label>Services Offered *</Label>
+      <div className="flex justify-between items-center">
+        <Label>Services Offered *</Label>
+        {maxServices !== Infinity && (
+          <span className="text-xs text-muted-foreground">
+            {remainingServices} of {maxServices} services remaining
+          </span>
+        )}
+      </div>
 
       <div className="flex gap-2">
         <Input
@@ -51,12 +73,13 @@ export default function ServicesInput({ services, setValue }) {
               addService();
             }
           }}
+          disabled={services.length >= maxServices}
         />
         <Button
           type="button"
           onClick={addService}
           variant="outline"
-          disabled={isAddingService}
+          disabled={isAddingService || services.length >= maxServices}
           className="border-blue-100 hover:border-blue-200 text-blue-600 hover:text-blue-500 hover:bg-blue-100 cursor-pointer transition-all duration-200 relative"
         >
           {isAddingService ? (
@@ -68,6 +91,13 @@ export default function ServicesInput({ services, setValue }) {
           )}
         </Button>
       </div>
+
+      {services.length >= maxServices && maxServices !== Infinity && (
+        <div className="flex items-center gap-2 text-amber-600 bg-amber-50 p-2 rounded-md text-xs">
+          <AlertCircle className="h-4 w-4" />
+          <span>Maximum services limit reached for {planName} plan</span>
+        </div>
+      )}
 
       {services.length > 0 && (
         <div className="flex flex-wrap gap-2">

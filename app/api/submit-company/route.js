@@ -10,6 +10,19 @@ export async function POST(request) {
     const email = formData.get("email");
     const description = formData.get("description");
     const services = JSON.parse(formData.get("services") || "[]");
+    const planType = formData.get("planType") || "free";
+    const billingCycle = formData.get("billingCycle");
+
+    // Validate services based on plan
+    if (planType === "free" && services.length > 3) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Free plan allows a maximum of 3 services",
+        },
+        { status: 400 }
+      );
+    }
 
     // Handle logo upload if present
     let logoAsset = null;
@@ -23,14 +36,23 @@ export async function POST(request) {
 
     // Create document in Sanity
     const doc = {
-      _type: "companySubmission",
+      _type: "applications",
       companyName,
       email,
       description,
       services,
+      planType,
       status: "pending",
+      paymentStatus: "pending",
       submissionDate: new Date().toISOString(),
+      featured: planType === "professional" || planType === "enterprise",
+      premium: planType === "enterprise",
     };
+
+    // Add billing cycle if provided (for paid plans)
+    if (billingCycle) {
+      doc.billingCycle = billingCycle;
+    }
 
     // Add logo reference if we have one
     if (logoAsset) {
@@ -54,6 +76,8 @@ export async function POST(request) {
         companyName,
         email,
         services,
+        planType,
+        billingCycle,
         submissionDate: doc.submissionDate,
       });
 
@@ -69,6 +93,7 @@ export async function POST(request) {
         success: true,
         id: result._id,
         emailSent: emailResult.success,
+        planType,
       },
       { status: 201 }
     );

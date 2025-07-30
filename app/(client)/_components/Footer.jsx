@@ -32,7 +32,7 @@ const Footer = () => {
               <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
                 <Button
                   size="lg"
-                  onClick={() => router.push("/join-us")}
+                  onClick={() => router.push("/membership")}
                   className="bg-white text-blue-500 hover:bg-white/90 font-semibold shadow-lg cursor-pointer"
                 >
                   List Your Business
@@ -104,7 +104,7 @@ const Footer = () => {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
                 <button
-                  onClick={() => router.push("/join-us")}
+                  onClick={() => router.push("/membership")}
                   className="hover:text-blue-500 transition-colors"
                 >
                   List Your Business

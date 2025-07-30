@@ -1,5 +1,8 @@
-import companySubmission from "./companySubmission";
+import company from "./company";
+import applications from "./applications";
 
-export const schema = {
-  types: [companySubmission],
-};
+export const schemaTypes = [
+  // Core business entities
+  company,
+  applications,
+];

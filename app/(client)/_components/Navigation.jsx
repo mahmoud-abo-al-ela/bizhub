@@ -12,6 +12,7 @@ const Navigation = () => {
   const navItems = [
     { label: "Home", path: "/" },
     { label: "Companies", path: "/companies" },
+    { label: "Membership", path: "/membership" },
   ];
 
   return (
@@ -52,7 +53,7 @@ const Navigation = () => {
           {/* CTA Button */}
           <div className="hidden md:block">
             <Button
-              onClick={() => router.push("/join-us")}
+              onClick={() => router.push("/membership")}
               className="bg-blue-500 hover:bg-blue-400 cursor-pointer"
             >
               List Your Business
@@ -89,7 +90,7 @@ const Navigation = () => {
               ))}
               <Button
                 onClick={() => {
-                  router.push("/join-us");
+                  router.push("/membership");
                   setIsMobileMenuOpen(false);
                 }}
                 className="bg-blue-500 hover:bg-blue-400 mt-2 cursor-pointer"

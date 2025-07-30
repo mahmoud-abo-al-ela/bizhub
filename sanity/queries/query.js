@@ -1,25 +1,100 @@
 import { defineQuery } from "next-sanity";
 
-const COMPANY_SUBMISSION_TYPE = "companySubmission";
-const APPROVED_STATUS = "approved";
-const LIMIT = 3;
-
-const APPROVED_COMPANIES_QUERY =
-  defineQuery(`*[_type == "${COMPANY_SUBMISSION_TYPE}" && status == "${APPROVED_STATUS}"] {
+// Company queries
+const COMPANIES_QUERY =
+  defineQuery(`*[_type == "company"] | order(companyName asc) {
   _id,
   companyName,
+  slug,
   description,
-  services,
-  logo
+  services[]->{
+    _id,
+    name,
+    slug
+  },
+  logo,
+  website,
+  featured,
+  premium,
+  planType,
+  rating,
+  reviewCount
 }`);
 
 const FEATURED_COMPANIES_QUERY =
-  defineQuery(`*[_type == "${COMPANY_SUBMISSION_TYPE}" && status == "${APPROVED_STATUS}"] | order(submissionDate desc)[0...${LIMIT}] {
+  defineQuery(`*[_type == "company" && featured == true] | order(premium desc, rating desc) [0...6] {
+  _id,
+  companyName,
+  slug,
+  description,
+  services[]->{
+    _id,
+    name,
+    slug
+  },
+  logo,
+  website,
+  featured,
+  premium,
+  planType,
+  rating,
+  reviewCount
+}`);
+
+const COMPANY_BY_SLUG_QUERY =
+  defineQuery(`*[_type == "company" && slug.current == $slug][0] {
+  _id,
+  companyName,
+  slug,
+  description,
+  services[]->{
+    _id,
+    name,
+    slug,
+    description,
+    icon
+  },
+  logo,
+  website,
+  location,
+  socialMedia,
+  gallery,
+  featured,
+  premium,
+  planType,
+  rating,
+  reviewCount,
+  "reviews": *[_type == "review" && company._ref == ^._id && isPublished == true] | order(createdAt desc) {
+    _id,
+    title,
+    content,
+    rating,
+    reviewer,
+    reviewerPosition,
+    reviewerCompany,
+    isVerified,
+    createdAt,
+    response
+  }
+}`);
+
+// Legacy queries for backward compatibility
+const APPROVED_COMPANIES_QUERY = defineQuery(`*[_type == "company"] {
   _id,
   companyName,
   description,
-  services,
+  services[]->{
+    _id,
+    name
+  },
   logo
 }`);
 
-export { APPROVED_COMPANIES_QUERY, FEATURED_COMPANIES_QUERY };
+export {
+  // Company queries
+  COMPANIES_QUERY,
+  FEATURED_COMPANIES_QUERY,
+  COMPANY_BY_SLUG_QUERY,
+  // Legacy queries
+  APPROVED_COMPANIES_QUERY,
+};
