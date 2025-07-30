@@ -10,7 +10,8 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 export async function POST(req) {
   try {
     const body = await req.text();
-    const signature = headers().get("Stripe-Signature");
+    const headersList = await headers();
+    const signature = headersList.get("Stripe-Signature");
 
     let event;
     try {

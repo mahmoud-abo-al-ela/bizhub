@@ -6,6 +6,14 @@ import {
 import { backendClient } from "@/sanity/lib/backendClient";
 import { updateSubmissionStatus } from "@/lib/sanity-actions";
 
+export async function GET() {
+  // Handle webhook verification from Sanity
+  return NextResponse.json({
+    success: true,
+    message: "Webhook endpoint is active",
+  });
+}
+
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -80,7 +88,7 @@ export async function POST(req) {
 
       // Extract relevant fields
       const {
-        _id,
+        _id: companyId,
         email,
         companyName,
         services,

@@ -186,7 +186,7 @@ export default {
 
       return {
         title,
-        subtitle: `${statusIndicator}${planLabels[plan] || "Free"} | Status: ${subtitle} ${
+        subtitle: `${planLabels[plan] || "Free"} | Status: ${subtitle} ${
           plan !== "free"
             ? `| Payment: ${payment === "paid" ? "✅" : "❌"}`
             : ""
