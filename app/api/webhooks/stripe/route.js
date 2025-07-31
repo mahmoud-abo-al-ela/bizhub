@@ -35,6 +35,15 @@ export async function POST(req) {
       case "checkout.session.completed":
         await handleCheckoutSessionCompleted(event.data.object);
         break;
+      case "invoice.payment_succeeded":
+        await handleInvoicePaymentSucceeded(event.data.object);
+        break;
+      case "customer.subscription.created":
+        await handleCustomerSubscriptionCreated(event.data.object);
+        break;
+      case "customer.subscription.updated":
+        await handleCustomerSubscriptionUpdated(event.data.object);
+        break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
@@ -150,5 +159,151 @@ async function handleCheckoutSessionCompleted(session) {
     }
   } catch (error) {
     console.error("Error handling checkout session completed:", error);
+  }
+}
+
+// Handle successful invoice payment
+async function handleInvoicePaymentSucceeded(invoice) {
+  try {
+    console.log(`Processing invoice payment: ${invoice.id}`);
+
+    // Get the customer ID from the invoice
+    const customerId = invoice.customer;
+    if (!customerId) {
+      console.log("No customer ID found in invoice");
+      return;
+    }
+
+    // Find the company submission by Stripe customer ID
+    const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
+    const submission = await backendClient.fetch(query, { customerId });
+
+    if (!submission) {
+      console.log(`No company submission found for customer: ${customerId}`);
+      return;
+    }
+
+    console.log(
+      `Found submission for invoice payment: ${submission.companyName}`
+    );
+
+    // Update payment status
+    const result = await updatePaymentStatus(submission._id, "paid");
+
+    if (result.success) {
+      // Update payment details
+      await backendClient
+        .patch(submission._id)
+        .set({
+          lastPaymentDate: new Date().toISOString(),
+          currentPeriodEnd: new Date(invoice.period_end * 1000).toISOString(),
+        })
+        .commit();
+
+      // Send payment confirmation email
+      await sendPaymentConfirmation(submission);
+
+      console.log(`Invoice payment processed for: ${submission.companyName}`);
+    } else {
+      console.error(`Failed to update payment status: ${result.message}`);
+    }
+  } catch (error) {
+    console.error("Error handling invoice payment succeeded:", error);
+  }
+}
+
+// Handle customer subscription created
+async function handleCustomerSubscriptionCreated(subscription) {
+  try {
+    console.log(`Processing subscription created: ${subscription.id}`);
+
+    const customerId = subscription.customer;
+    if (!customerId) {
+      console.log("No customer ID found in subscription");
+      return;
+    }
+
+    // Find the company submission by Stripe customer ID
+    const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
+    const submission = await backendClient.fetch(query, { customerId });
+
+    if (!submission) {
+      console.log(`No company submission found for customer: ${customerId}`);
+      return;
+    }
+
+    console.log(
+      `Found submission for subscription created: ${submission.companyName}`
+    );
+
+    // Update subscription details
+    await backendClient
+      .patch(submission._id)
+      .set({
+        stripeSubscriptionId: subscription.id,
+        subscriptionStatus: subscription.status,
+        currentPeriodEnd: new Date(
+          subscription.current_period_end * 1000
+        ).toISOString(),
+      })
+      .commit();
+
+    console.log(`Subscription details updated for: ${submission.companyName}`);
+  } catch (error) {
+    console.error("Error handling customer subscription created:", error);
+  }
+}
+
+// Handle customer subscription updated
+async function handleCustomerSubscriptionUpdated(subscription) {
+  try {
+    console.log(`Processing subscription updated: ${subscription.id}`);
+
+    const customerId = subscription.customer;
+    if (!customerId) {
+      console.log("No customer ID found in subscription");
+      return;
+    }
+
+    // Find the company submission by Stripe customer ID
+    const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
+    const submission = await backendClient.fetch(query, { customerId });
+
+    if (!submission) {
+      console.log(`No company submission found for customer: ${customerId}`);
+      return;
+    }
+
+    console.log(
+      `Found submission for subscription updated: ${submission.companyName}`
+    );
+
+    // Update subscription status
+    await backendClient
+      .patch(submission._id)
+      .set({
+        subscriptionStatus: subscription.status,
+        currentPeriodEnd: new Date(
+          subscription.current_period_end * 1000
+        ).toISOString(),
+      })
+      .commit();
+
+    // If subscription is active and payment status is not paid, update it
+    if (
+      subscription.status === "active" &&
+      submission.paymentStatus !== "paid"
+    ) {
+      const result = await updatePaymentStatus(submission._id, "paid");
+      if (result.success) {
+        console.log(
+          `Payment status updated to paid for: ${submission.companyName}`
+        );
+      }
+    }
+
+    console.log(`Subscription status updated for: ${submission.companyName}`);
+  } catch (error) {
+    console.error("Error handling customer subscription updated:", error);
   }
 }
