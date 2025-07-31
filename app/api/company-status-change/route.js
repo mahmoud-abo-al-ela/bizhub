@@ -4,7 +4,7 @@ import {
   sendRejectionNotification,
 } from "@/lib/email";
 import { backendClient } from "@/sanity/lib/backendClient";
-import { updateSubmissionStatus } from "@/lib/sanity-actions";
+import { updateApplicationStatus } from "@/lib/sanity-actions";
 
 export async function GET() {
   // Handle webhook verification from Sanity
@@ -114,11 +114,11 @@ export async function POST(req) {
       );
 
       // Handle status change - this will create company for free plans automatically
-      const statusResult = await updateSubmissionStatus(documentId, status);
+      const statusResult = await updateApplicationStatus(documentId, status);
 
       if (!statusResult.success) {
         console.error(
-          "Failed to update submission status:",
+          "Failed to update application status:",
           statusResult.message
         );
         return NextResponse.json(
@@ -187,7 +187,7 @@ export async function POST(req) {
       );
 
       // Handle status change - this will create company for free plans automatically
-      const statusResult = await updateSubmissionStatus(companyId, status);
+      const statusResult = await updateApplicationStatus(companyId, status);
 
       if (!statusResult.success) {
         return NextResponse.json(
