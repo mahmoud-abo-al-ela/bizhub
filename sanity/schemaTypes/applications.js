@@ -167,6 +167,22 @@ export default {
       type: "datetime",
       readOnly: true, // Auto-generated, cannot be edited
     },
+    {
+      name: "processedToCompany",
+      title: "Processed to Company",
+      type: "boolean",
+      description: "Whether this application has been processed into a company",
+      initialValue: false,
+      readOnly: true, // Auto-managed by the system
+    },
+    {
+      name: "companyReference",
+      title: "Company Reference",
+      type: "reference",
+      to: [{ type: "company" }],
+      description: "Reference to the company created from this application",
+      readOnly: true, // Auto-managed by the system
+    },
   ],
   preview: {
     select: {
