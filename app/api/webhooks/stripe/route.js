@@ -39,10 +39,11 @@ export async function POST(req) {
         await handleInvoicePaymentSucceeded(event.data.object);
         break;
       case "customer.subscription.created":
-        await handleCustomerSubscriptionCreated(event.data.object);
-        break;
       case "customer.subscription.updated":
-        await handleCustomerSubscriptionUpdated(event.data.object);
+        await handleSubscriptionEvent(event.data.object, event.type);
+        break;
+      case "customer.subscription.deleted":
+        await handleSubscriptionCancelled(event.data.object);
         break;
       default:
         console.log(`Unhandled event type: ${event.type}`);
@@ -59,7 +60,7 @@ export async function POST(req) {
 }
 
 // Helper function to check if a submission has a valid stripeCustomerId
-async function hasValidStripeCustomerId(submission) {
+function hasValidStripeCustomerId(submission) {
   return (
     submission &&
     submission.stripeCustomerId &&
@@ -67,11 +68,63 @@ async function hasValidStripeCustomerId(submission) {
   );
 }
 
+// Helper function to find submission by customer ID or company ID
+async function findSubmission(subscription) {
+  let submission = null;
+  const customerId = subscription.customer;
+
+  if (!customerId) {
+    console.log("No customer ID found in subscription");
+    return null;
+  }
+
+  // Prefer companyId from metadata
+  if (subscription.metadata?.companyId) {
+    submission = await backendClient.getDocument(
+      subscription.metadata.companyId
+    );
+  }
+
+  // If not found by companyId, try to find by customer ID
+  if (!submission) {
+    const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
+    submission = await backendClient.fetch(query, { customerId });
+  }
+
+  return submission;
+}
+
+// Helper function to update both submission and company with subscription data
+async function updateSubscriptionData(submission, subscriptionData) {
+  // Update the submission
+  await backendClient.patch(submission._id).set(subscriptionData).commit();
+  console.log(
+    `Subscription details updated for submission: ${submission.companyName}`
+  );
+
+  // Also update the company document if it exists
+  if (submission.processedToCompany && submission.companyReference?._ref) {
+    try {
+      await backendClient
+        .patch(submission.companyReference._ref)
+        .set(subscriptionData)
+        .commit();
+      console.log(
+        `Subscription details also updated for company: ${submission.companyName}`
+      );
+    } catch (error) {
+      console.error(
+        `Error updating company subscription details: ${error.message}`
+      );
+    }
+  }
+}
+
 // Handle successful payment from payment link
 async function handlePaymentIntentSucceeded(paymentIntent) {
   try {
     // Check if this payment is related to a company submission
-    if (!paymentIntent.metadata || !paymentIntent.metadata.companyId) {
+    if (!paymentIntent.metadata?.companyId) {
       console.log("Payment not related to a company submission");
       return;
     }
@@ -82,14 +135,12 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     // Get the company submission
     const submission = await backendClient.getDocument(companyId);
     if (!submission) {
-      console.error(
-        `Company submission not found: ${companyId} from payment intent succeeded`
-      );
+      console.error(`Company submission not found: ${companyId}`);
       return;
     }
 
     // Check if stripeCustomerId is already linked - if not, ignore this event
-    if (!(await hasValidStripeCustomerId(submission))) {
+    if (!hasValidStripeCustomerId(submission)) {
       console.log(
         `Ignoring payment_intent.succeeded - stripeCustomerId not yet linked for: ${companyId}`
       );
@@ -108,18 +159,12 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
           lastPaymentDate: new Date().toISOString(),
           currentPeriodEnd: new Date(
             Date.now() +
-              (submission.billingCycle === "yearly" ? 365 : 30) *
-                24 *
-                60 *
-                60 *
-                1000
+              (submission.billingCycle === "yearly" ? 365 : 30) * 86400000
           ).toISOString(),
         })
         .commit();
 
-      // Send payment confirmation email
       await sendPaymentConfirmation(submission);
-
       console.log(`Payment processed for: ${submission.companyName}`);
     } else {
       console.error(`Failed to update payment status: ${result.message}`);
@@ -129,24 +174,27 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
   }
 }
 
-// Handle successful checkout session - ONLY this event patches Sanity
+// Handle successful checkout session
 async function handleCheckoutSessionCompleted(session) {
   try {
     if (session.mode !== "subscription" && session.mode !== "payment") return;
 
-    const metadata = session.metadata;
-    if (!metadata?.companyId) {
-      console.error("❌ Missing metadata or companyId in session");
+    if (!session.metadata?.companyId) {
+      console.error("Missing metadata or companyId in session");
       return;
     }
 
-    const submission = await backendClient.getDocument(metadata.companyId);
+    const submission = await backendClient.getDocument(
+      session.metadata.companyId
+    );
     if (!submission) {
-      console.error(`❌ Submission not found for ID: ${metadata.companyId}`);
+      console.error(
+        `Submission not found for ID: ${session.metadata.companyId}`
+      );
       return;
     }
 
-    // Prepare patch data first
+    // Prepare patch data
     const patchData = {
       lastPaymentDate: new Date().toISOString(),
     };
@@ -155,51 +203,51 @@ async function handleCheckoutSessionCompleted(session) {
       patchData.stripeCustomerId = session.customer;
     }
 
-    // For subscription mode, ensure we get subscription details
-    if (session.mode === "subscription") {
+    // For subscription mode, get subscription details
+    if (session.mode === "subscription" && session.subscription) {
       try {
-        if (session.subscription) {
-          console.log(
-            `Retrieving subscription details for: ${session.subscription}`
-          );
-          const stripeSub = await stripe.subscriptions.retrieve(
-            session.subscription
-          );
-          patchData.stripeSubscriptionId = stripeSub.id;
-          patchData.subscriptionStatus = stripeSub.status;
+        // Store subscription ID as fallback
+        patchData.stripeSubscriptionId = session.subscription;
+        patchData.subscriptionStatus = "active";
+
+        // Try to get full details
+        const stripeSub = await stripe.subscriptions.retrieve(
+          session.subscription
+        );
+        patchData.stripeSubscriptionId = stripeSub.id;
+        patchData.subscriptionStatus = stripeSub.status;
+        patchData.currentPeriodEnd = new Date(
+          stripeSub.current_period_end * 1000
+        ).toISOString();
+      } catch (error) {
+        console.error(
+          `Error retrieving subscription details: ${error.message}`
+        );
+
+        // Set default period end if needed
+        if (!patchData.currentPeriodEnd) {
+          const days = submission.billingCycle === "yearly" ? 365 : 30;
           patchData.currentPeriodEnd = new Date(
-            stripeSub.current_period_end * 1000
+            Date.now() + days * 86400000
           ).toISOString();
-          console.log(
-            `Successfully retrieved subscription: ${stripeSub.id}, status: ${stripeSub.status}`
-          );
-        } else {
-          console.log(
-            `No subscription ID in session for ${submission.companyName}, will be updated by subscription.created webhook`
-          );
         }
-      } catch (subError) {
-        console.error(`Error retrieving subscription: ${subError.message}`);
       }
     }
 
-    // Apply the patch first to ensure subscription data is saved
+    // Apply the patch
     await backendClient.patch(submission._id).set(patchData).commit();
-    console.log(`Updated subscription details for: ${submission.companyName}`);
 
-    // Then update payment status which may trigger company creation
+    // Update payment status which may trigger company creation
     const updateResult = await updatePaymentStatus(submission._id, "paid");
     if (!updateResult.success) {
-      console.error("❌ Failed to update payment status in Sanity");
+      console.error("Failed to update payment status in Sanity");
       return;
     }
 
-    // We've already committed the patch data above
     await sendPaymentConfirmation(submission);
-
-    console.log(`✅ Payment processed for: ${submission.companyName}`);
+    console.log(`Payment processed for: ${submission.companyName}`);
   } catch (error) {
-    console.error("❌ Error in handleCheckoutSessionCompleted:", error.message);
+    console.error("Error in handleCheckoutSessionCompleted:", error.message);
   }
 }
 
@@ -210,7 +258,7 @@ async function handleInvoicePaymentSucceeded(invoice) {
 
     const customerId = invoice.customer;
     if (!customerId) {
-      console.log("❌ No customer ID found in invoice");
+      console.log("No customer ID found in invoice");
       return;
     }
 
@@ -220,16 +268,12 @@ async function handleInvoicePaymentSucceeded(invoice) {
 
     if (!submission) {
       console.log(
-        `⚠️ No company submission found for customer: ${customerId} from invoice payment`
+        `No company submission found for customer: ${customerId} from invoice payment`
       );
       return;
     }
 
-    console.log(
-      `✅ Found submission for invoice payment: ${submission.companyName}`
-    );
-
-    // Update the payment status in your app
+    // Update the payment status
     const result = await updatePaymentStatus(submission._id, "paid");
 
     if (result.success) {
@@ -242,132 +286,55 @@ async function handleInvoicePaymentSucceeded(invoice) {
         })
         .commit();
 
-      // Optionally notify the company
       await sendPaymentConfirmation(submission);
-
-      console.log(
-        `✅ Invoice payment processed for: ${submission.companyName}`
-      );
+      console.log(`Invoice payment processed for: ${submission.companyName}`);
     } else {
-      console.error(`❌ Failed to update payment status: ${result.message}`);
+      console.error(`Failed to update payment status: ${result.message}`);
     }
   } catch (error) {
-    console.error("❌ Error handling invoice payment succeeded:", error);
+    console.error("Error handling invoice payment succeeded:", error);
   }
 }
 
-// Handle customer subscription created
-async function handleCustomerSubscriptionCreated(subscription) {
+// Unified handler for subscription created and updated events
+async function handleSubscriptionEvent(subscription, eventType) {
   try {
     console.log(
-      `Processing subscription created: ${subscription.id}, status: ${subscription.status}, customer: ${subscription.customer}, metadata:`,
-      subscription.metadata
+      `Processing ${eventType}: ${subscription.id}, status: ${subscription.status}`
     );
 
-    const customerId = subscription.customer;
-    if (!customerId) {
-      console.log("No customer ID found in subscription");
-      return;
-    }
-
-    let submission = null;
-
-    // Prefer companyId from metadata
-    if (subscription.metadata?.companyId) {
-      submission = await backendClient.getDocument(
-        subscription.metadata.companyId
-      );
-    }
-
-    // If not found by companyId, try to find by email
-    if (!submission) {
-      const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
-      submission = await backendClient.fetch(query, { customerId });
-    }
-
+    const submission = await findSubmission(subscription);
     if (!submission) {
       console.log(
-        `No company submission found for customer: ${customerId} from subscription created`
+        `No company submission found for subscription: ${subscription.id}`
       );
       return;
     }
 
-    console.log(
-      `Found submission for subscription created: ${submission.companyName}`
-    );
-
-    // Update subscription details
-    await backendClient
-      .patch(submission._id)
-      .set({
-        stripeSubscriptionId: subscription.id,
-        subscriptionStatus: subscription.status,
-        currentPeriodEnd: new Date(
-          subscription.current_period_end * 1000
-        ).toISOString(),
-      })
-      .commit();
-
-    console.log(`Subscription details updated for: ${submission.companyName}`);
-  } catch (error) {
-    console.error("Error handling customer subscription created:", error);
-  }
-}
-
-// Handle customer subscription updated
-async function handleCustomerSubscriptionUpdated(subscription) {
-  try {
-    console.log(`Processing subscription updated: ${subscription.id}`);
-
-    const customerId = subscription.customer;
-    if (!customerId) {
-      console.log("No customer ID found in subscription");
-      return;
-    }
-
-    let submission = null;
-
-    // Prefer companyId from metadata
-    if (subscription.metadata?.companyId) {
-      submission = await backendClient.getDocument(
-        subscription.metadata.companyId
-      );
-    }
-
-    if (!submission) {
-      const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
-      submission = await backendClient.fetch(query, { customerId });
-    }
-
-    if (!submission) {
+    // For subscription.updated events, check if customer ID is linked
+    if (
+      eventType === "customer.subscription.updated" &&
+      !hasValidStripeCustomerId(submission)
+    ) {
       console.log(
-        `No company submission found for customer: ${customerId} from subscription updated`
+        `Ignoring ${eventType} - stripeCustomerId not linked for: ${submission._id}`
       );
       return;
     }
 
-    // Check if stripeCustomerId is already linked - if not, ignore this event
-    if (!(await hasValidStripeCustomerId(submission))) {
-      console.log(
-        `Ignoring customer.subscription.updated - stripeCustomerId not yet linked for customer: ${customerId}`
-      );
-      return;
-    }
+    console.log(`Found submission for ${eventType}: ${submission.companyName}`);
 
-    console.log(
-      `Found submission for subscription updated: ${submission.companyName}`
-    );
+    // Prepare subscription data
+    const subscriptionData = {
+      stripeSubscriptionId: subscription.id,
+      subscriptionStatus: subscription.status,
+      currentPeriodEnd: new Date(
+        subscription.current_period_end * 1000
+      ).toISOString(),
+    };
 
-    // Update subscription status
-    await backendClient
-      .patch(submission._id)
-      .set({
-        subscriptionStatus: subscription.status,
-        currentPeriodEnd: new Date(
-          subscription.current_period_end * 1000
-        ).toISOString(),
-      })
-      .commit();
+    // Update both submission and company documents
+    await updateSubscriptionData(submission, subscriptionData);
 
     // If subscription is active and payment status is not paid, update it
     if (
@@ -381,9 +348,37 @@ async function handleCustomerSubscriptionUpdated(subscription) {
         );
       }
     }
-
-    console.log(`Subscription status updated for: ${submission.companyName}`);
   } catch (error) {
-    console.error("Error handling customer subscription updated:", error);
+    console.error(`Error handling ${eventType}:`, error);
+  }
+}
+
+// Handle subscription cancellation
+async function handleSubscriptionCancelled(subscription) {
+  try {
+    console.log(`Processing subscription cancelled: ${subscription.id}`);
+
+    const submission = await findSubmission(subscription);
+    if (!submission) {
+      console.log(
+        `No company submission found for cancelled subscription: ${subscription.id}`
+      );
+      return;
+    }
+
+    // Update subscription status
+    const subscriptionData = {
+      subscriptionStatus: "canceled",
+      // Keep the current_period_end as is, since that's when access will end
+    };
+
+    // Update both submission and company documents
+    await updateSubscriptionData(submission, subscriptionData);
+
+    console.log(
+      `Subscription cancellation processed for: ${submission.companyName}`
+    );
+  } catch (error) {
+    console.error("Error handling subscription cancellation:", error);
   }
 }
