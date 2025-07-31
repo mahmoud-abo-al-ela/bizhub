@@ -146,13 +146,7 @@ async function handleCheckoutSessionCompleted(session) {
       return;
     }
 
-    // Always update payment status first
-    const updateResult = await updatePaymentStatus(submission._id, "paid");
-    if (!updateResult.success) {
-      console.error("❌ Failed to update payment status in Sanity");
-      return;
-    }
-
+    // Prepare patch data first
     const patchData = {
       lastPaymentDate: new Date().toISOString(),
     };
@@ -161,6 +155,7 @@ async function handleCheckoutSessionCompleted(session) {
       patchData.stripeCustomerId = session.customer;
     }
 
+    // For subscription mode, ensure we get subscription details
     if (session.mode === "subscription") {
       try {
         if (session.subscription) {
@@ -188,15 +183,18 @@ async function handleCheckoutSessionCompleted(session) {
       }
     }
 
-    // Set a default period end if not already set by subscription
-    if (!patchData.currentPeriodEnd) {
-      const days = submission.billingCycle === "yearly" ? 365 : 30;
-      patchData.currentPeriodEnd = new Date(
-        Date.now() + days * 86400000
-      ).toISOString();
+    // Apply the patch first to ensure subscription data is saved
+    await backendClient.patch(submission._id).set(patchData).commit();
+    console.log(`Updated subscription details for: ${submission.companyName}`);
+
+    // Then update payment status which may trigger company creation
+    const updateResult = await updatePaymentStatus(submission._id, "paid");
+    if (!updateResult.success) {
+      console.error("❌ Failed to update payment status in Sanity");
+      return;
     }
 
-    await backendClient.patch(submission._id).set(patchData).commit();
+    // We've already committed the patch data above
     await sendPaymentConfirmation(submission);
 
     console.log(`✅ Payment processed for: ${submission.companyName}`);
