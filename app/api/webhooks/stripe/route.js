@@ -136,29 +136,19 @@ async function handleCheckoutSessionCompleted(session) {
     if (session.mode !== "payment" && session.mode !== "subscription") return;
 
     const metadata = session.metadata;
-    if (!metadata?.companyId) {
+    if (!metadata || !metadata.companyId) {
       console.error("❌ Missing metadata or companyId in session");
       return;
     }
 
-    // Retrieve the submission from Sanity using metadata
+    // Fetch submission from Sanity
     const submission = await backendClient.getDocument(metadata.companyId);
     if (!submission) {
-      console.error(
-        `❌ Company submission not found for ID: ${metadata.companyId}`
-      );
+      console.error(`❌ Submission not found for ID: ${metadata.companyId}`);
       return;
     }
 
-    // Immediately patch stripeCustomerId to ensure future webhook events work
-    await backendClient
-      .patch(submission._id)
-      .setIfMissing({
-        stripeCustomerId: session.customer,
-      })
-      .commit();
-
-    // Update payment status in Sanity (assumes this triggers logic like status change)
+    // Mark as paid (this may trigger status changes)
     const updateResult = await updatePaymentStatus(submission._id, "paid");
     if (!updateResult.success) {
       console.error("❌ Failed to update payment status in Sanity");
@@ -167,40 +157,39 @@ async function handleCheckoutSessionCompleted(session) {
 
     // Determine current period end
     let currentPeriodEnd;
-    const billingDays = submission.billingCycle === "yearly" ? 365 : 30;
-
-    if (
-      typeof session.subscription === "object" &&
-      session.subscription?.current_period_end
-    ) {
+    if (session.subscription && typeof session.subscription === "object") {
       currentPeriodEnd = new Date(
         session.subscription.current_period_end * 1000
       );
     } else {
-      currentPeriodEnd = new Date(
-        Date.now() + billingDays * 24 * 60 * 60 * 1000
-      );
+      const days = submission.billingCycle === "yearly" ? 365 : 30;
+      currentPeriodEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     }
 
-    // Final Sanity patch with full Stripe data
-    await backendClient
-      .patch(submission._id)
-      .set({
-        stripeSubscriptionId:
-          typeof session.subscription === "string"
-            ? session.subscription
-            : session.subscription?.id,
-        lastPaymentDate: new Date().toISOString(),
-        currentPeriodEnd: currentPeriodEnd.toISOString(),
-      })
-      .commit();
+    // Build patch object
+    const patchData = {
+      lastPaymentDate: new Date().toISOString(),
+      currentPeriodEnd: currentPeriodEnd.toISOString(),
+    };
+
+    // Add Stripe customer/subscription info only if missing (i.e. first payment)
+    if (!submission.stripeCustomerId) {
+      patchData.stripeCustomerId = session.customer;
+      console.log("🔄 Adding new Stripe customer ID to Sanity");
+    }
+
+    if (!submission.stripeSubscriptionId && session.subscription) {
+      patchData.stripeSubscriptionId = session.subscription;
+      console.log("🔄 Adding new Stripe subscription ID to Sanity");
+    }
+
+    // Apply patch to Sanity
+    await backendClient.patch(submission._id).set(patchData).commit();
 
     // Send confirmation email
     await sendPaymentConfirmation(submission);
 
-    console.log(
-      `✅ Payment processed successfully for: ${submission.companyName}`
-    );
+    console.log(`✅ Payment processed for: ${submission.companyName}`);
   } catch (error) {
     console.error(
       "❌ Error in handleCheckoutSessionCompleted:",
@@ -215,41 +204,32 @@ async function handleInvoicePaymentSucceeded(invoice) {
   try {
     console.log(`Processing invoice payment: ${invoice.id}`);
 
-    // Get the customer ID from the invoice
     const customerId = invoice.customer;
     if (!customerId) {
-      console.log("No customer ID found in invoice");
+      console.log("❌ No customer ID found in invoice");
       return;
     }
 
-    // Find the company submission by Stripe customer ID
+    // Find the submission with this Stripe customer ID
     const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
     const submission = await backendClient.fetch(query, { customerId });
 
     if (!submission) {
       console.log(
-        `No company submission found for customer: ${customerId} from invoice payment`
-      );
-      return;
-    }
-
-    // Check if stripeCustomerId is already linked - if not, ignore this event
-    if (!(await hasValidStripeCustomerId(submission))) {
-      console.log(
-        `Ignoring invoice.payment_succeeded - stripeCustomerId not yet linked for customer: ${customerId}`
+        `⚠️ No company submission found for customer: ${customerId} from invoice payment`
       );
       return;
     }
 
     console.log(
-      `Found submission for invoice payment: ${submission.companyName}`
+      `✅ Found submission for invoice payment: ${submission.companyName}`
     );
 
-    // Update payment status
+    // Update the payment status in your app
     const result = await updatePaymentStatus(submission._id, "paid");
 
     if (result.success) {
-      // Update payment details
+      // Update the document in Sanity
       await backendClient
         .patch(submission._id)
         .set({
@@ -258,15 +238,17 @@ async function handleInvoicePaymentSucceeded(invoice) {
         })
         .commit();
 
-      // Send payment confirmation email
+      // Optionally notify the company
       await sendPaymentConfirmation(submission);
 
-      console.log(`Invoice payment processed for: ${submission.companyName}`);
+      console.log(
+        `✅ Invoice payment processed for: ${submission.companyName}`
+      );
     } else {
-      console.error(`Failed to update payment status: ${result.message}`);
+      console.error(`❌ Failed to update payment status: ${result.message}`);
     }
   } catch (error) {
-    console.error("Error handling invoice payment succeeded:", error);
+    console.error("❌ Error handling invoice payment succeeded:", error);
   }
 }
 
