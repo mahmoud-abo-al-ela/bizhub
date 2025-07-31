@@ -136,8 +136,8 @@ async function handleCheckoutSessionCompleted(session) {
     if (session.mode !== "payment" && session.mode !== "subscription") return;
 
     const metadata = session.metadata;
-    if (!metadata || !metadata.companyId) {
-      console.error("Missing metadata or companyId in session");
+    if (!metadata?.companyId) {
+      console.error("❌ Missing metadata or companyId in session");
       return;
     }
 
@@ -145,37 +145,51 @@ async function handleCheckoutSessionCompleted(session) {
     const submission = await backendClient.getDocument(metadata.companyId);
     if (!submission) {
       console.error(
-        `Company submission not found for ID: ${metadata.companyId} from checkout session completed`
+        `❌ Company submission not found for ID: ${metadata.companyId}`
       );
       return;
     }
+
+    // Immediately patch stripeCustomerId to ensure future webhook events work
+    await backendClient
+      .patch(submission._id)
+      .setIfMissing({
+        stripeCustomerId: session.customer,
+      })
+      .commit();
 
     // Update payment status in Sanity (assumes this triggers logic like status change)
     const updateResult = await updatePaymentStatus(submission._id, "paid");
     if (!updateResult.success) {
-      console.error("Failed to update payment status in Sanity");
+      console.error("❌ Failed to update payment status in Sanity");
       return;
     }
 
-    // Determine current period end (prefer Stripe's subscription data if available)
-    let currentPeriodEnd = new Date();
-    if (session.subscription && typeof session.subscription === "object") {
-      // If you expanded the session.subscription object in webhook settings
+    // Determine current period end
+    let currentPeriodEnd;
+    const billingDays = submission.billingCycle === "yearly" ? 365 : 30;
+
+    if (
+      typeof session.subscription === "object" &&
+      session.subscription?.current_period_end
+    ) {
       currentPeriodEnd = new Date(
         session.subscription.current_period_end * 1000
       );
     } else {
-      // Fallback: approximate period end manually
-      const days = submission.billingCycle === "yearly" ? 365 : 30;
-      currentPeriodEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+      currentPeriodEnd = new Date(
+        Date.now() + billingDays * 24 * 60 * 60 * 1000
+      );
     }
 
-    // Patch Sanity with Stripe details
+    // Final Sanity patch with full Stripe data
     await backendClient
       .patch(submission._id)
       .set({
-        stripeCustomerId: session.customer,
-        stripeSubscriptionId: session.subscription,
+        stripeSubscriptionId:
+          typeof session.subscription === "string"
+            ? session.subscription
+            : session.subscription?.id,
         lastPaymentDate: new Date().toISOString(),
         currentPeriodEnd: currentPeriodEnd.toISOString(),
       })
@@ -185,11 +199,11 @@ async function handleCheckoutSessionCompleted(session) {
     await sendPaymentConfirmation(submission);
 
     console.log(
-      `✅ Payment completed and processed for: ${submission.companyName}`
+      `✅ Payment processed successfully for: ${submission.companyName}`
     );
   } catch (error) {
     console.error(
-      "❌ Error handling checkout.session.completed:",
+      "❌ Error in handleCheckoutSessionCompleted:",
       error.message,
       error
     );
