@@ -161,16 +161,35 @@ async function handleCheckoutSessionCompleted(session) {
       patchData.stripeCustomerId = session.customer;
     }
 
-    if (session.mode === "subscription" && session.subscription) {
-      const stripeSub = await stripeClient.subscriptions.retrieve(
-        session.subscription
-      );
-      patchData.stripeSubscriptionId = stripeSub.id;
-      patchData.subscriptionStatus = stripeSub.status;
-      patchData.currentPeriodEnd = new Date(
-        stripeSub.current_period_end * 1000
-      ).toISOString();
-    } else {
+    if (session.mode === "subscription") {
+      try {
+        if (session.subscription) {
+          console.log(
+            `Retrieving subscription details for: ${session.subscription}`
+          );
+          const stripeSub = await stripe.subscriptions.retrieve(
+            session.subscription
+          );
+          patchData.stripeSubscriptionId = stripeSub.id;
+          patchData.subscriptionStatus = stripeSub.status;
+          patchData.currentPeriodEnd = new Date(
+            stripeSub.current_period_end * 1000
+          ).toISOString();
+          console.log(
+            `Successfully retrieved subscription: ${stripeSub.id}, status: ${stripeSub.status}`
+          );
+        } else {
+          console.log(
+            `No subscription ID in session for ${submission.companyName}, will be updated by subscription.created webhook`
+          );
+        }
+      } catch (subError) {
+        console.error(`Error retrieving subscription: ${subError.message}`);
+      }
+    }
+
+    // Set a default period end if not already set by subscription
+    if (!patchData.currentPeriodEnd) {
       const days = submission.billingCycle === "yearly" ? 365 : 30;
       patchData.currentPeriodEnd = new Date(
         Date.now() + days * 86400000
@@ -242,7 +261,10 @@ async function handleInvoicePaymentSucceeded(invoice) {
 // Handle customer subscription created
 async function handleCustomerSubscriptionCreated(subscription) {
   try {
-    console.log(`Processing subscription created: ${subscription.id}`);
+    console.log(
+      `Processing subscription created: ${subscription.id}, status: ${subscription.status}, customer: ${subscription.customer}, metadata:`,
+      subscription.metadata
+    );
 
     const customerId = subscription.customer;
     if (!customerId) {
@@ -268,14 +290,6 @@ async function handleCustomerSubscriptionCreated(subscription) {
     if (!submission) {
       console.log(
         `No company submission found for customer: ${customerId} from subscription created`
-      );
-      return;
-    }
-
-    // Check if stripeCustomerId is already linked - if not, ignore this event
-    if (!(await hasValidStripeCustomerId(submission))) {
-      console.log(
-        `Ignoring customer.subscription.created - stripeCustomerId not yet linked for customer: ${customerId}`
       );
       return;
     }
