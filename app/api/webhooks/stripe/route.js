@@ -92,9 +92,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
       // Send payment confirmation email
       await sendPaymentConfirmation(submission);
 
-      console.log(
-        `Payment processed and company created for: ${submission.companyName}`
-      );
+      console.log(`Payment processed for: ${submission.companyName}`);
     } else {
       console.error(`Failed to update payment status: ${result.message}`);
     }
@@ -112,7 +110,7 @@ async function handleCheckoutSessionCompleted(session) {
     if (!metadata) return;
 
     // Find company submission in Sanity
-    const query = `*[_type == "companySubmission" && email == $email && companyName == $companyName][0]`;
+    const query = `*[_type == "applications" && email == $email && companyName == $companyName][0]`;
     const submission = await backendClient.fetch(query, {
       email: metadata.email,
       companyName: metadata.companyName,
@@ -148,9 +146,7 @@ async function handleCheckoutSessionCompleted(session) {
       // Send payment confirmation
       await sendPaymentConfirmation(submission);
 
-      console.log(
-        `Payment processed and company created for: ${submission.companyName}`
-      );
+      console.log(`Payment processed for: ${submission.companyName}`);
     }
   } catch (error) {
     console.error("Error handling checkout session completed:", error);
