@@ -132,70 +132,57 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 // Handle successful checkout session - ONLY this event patches Sanity
 async function handleCheckoutSessionCompleted(session) {
   try {
-    // Only handle one-time or subscription payments
-    if (session.mode !== "payment" && session.mode !== "subscription") return;
+    if (session.mode !== "subscription" && session.mode !== "payment") return;
 
     const metadata = session.metadata;
-    if (!metadata || !metadata.companyId) {
+    if (!metadata?.companyId) {
       console.error("❌ Missing metadata or companyId in session");
       return;
     }
 
-    // Fetch submission from Sanity
     const submission = await backendClient.getDocument(metadata.companyId);
     if (!submission) {
       console.error(`❌ Submission not found for ID: ${metadata.companyId}`);
       return;
     }
 
-    // Mark as paid (this may trigger status changes)
+    // Always update payment status first
     const updateResult = await updatePaymentStatus(submission._id, "paid");
     if (!updateResult.success) {
       console.error("❌ Failed to update payment status in Sanity");
       return;
     }
 
-    // Determine current period end
-    let currentPeriodEnd;
-    if (session.subscription && typeof session.subscription === "object") {
-      currentPeriodEnd = new Date(
-        session.subscription.current_period_end * 1000
-      );
-    } else {
-      const days = submission.billingCycle === "yearly" ? 365 : 30;
-      currentPeriodEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-    }
-
-    // Build patch object
     const patchData = {
       lastPaymentDate: new Date().toISOString(),
-      currentPeriodEnd: currentPeriodEnd.toISOString(),
     };
 
-    // Add Stripe customer/subscription info only if missing (i.e. first payment)
     if (!submission.stripeCustomerId) {
       patchData.stripeCustomerId = session.customer;
-      console.log("🔄 Adding new Stripe customer ID to Sanity");
     }
 
-    if (!submission.stripeSubscriptionId && session.subscription) {
-      patchData.stripeSubscriptionId = session.subscription;
-      console.log("🔄 Adding new Stripe subscription ID to Sanity");
+    if (session.mode === "subscription" && session.subscription) {
+      const stripeSub = await stripeClient.subscriptions.retrieve(
+        session.subscription
+      );
+      patchData.stripeSubscriptionId = stripeSub.id;
+      patchData.subscriptionStatus = stripeSub.status;
+      patchData.currentPeriodEnd = new Date(
+        stripeSub.current_period_end * 1000
+      ).toISOString();
+    } else {
+      const days = submission.billingCycle === "yearly" ? 365 : 30;
+      patchData.currentPeriodEnd = new Date(
+        Date.now() + days * 86400000
+      ).toISOString();
     }
 
-    // Apply patch to Sanity
     await backendClient.patch(submission._id).set(patchData).commit();
-
-    // Send confirmation email
     await sendPaymentConfirmation(submission);
 
     console.log(`✅ Payment processed for: ${submission.companyName}`);
   } catch (error) {
-    console.error(
-      "❌ Error in handleCheckoutSessionCompleted:",
-      error.message,
-      error
-    );
+    console.error("❌ Error in handleCheckoutSessionCompleted:", error.message);
   }
 }
 
