@@ -130,51 +130,67 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
 // Handle successful checkout session - ONLY this event patches Sanity
 async function handleCheckoutSessionCompleted(session) {
   try {
+    // Only handle one-time or subscription payments
     if (session.mode !== "payment" && session.mode !== "subscription") return;
 
     const metadata = session.metadata;
-    if (!metadata) return;
-
-    // Find company submission in Sanity
-    let submission = null;
-    if (metadata?.companyId) {
-      submission = await backendClient.getDocument(metadata.companyId);
-    }
-
-    if (!submission) {
-      console.error("Company submission not found in Sanity");
+    if (!metadata || !metadata.companyId) {
+      console.error("Missing metadata or companyId in session");
       return;
     }
 
-    // Update payment status to trigger company creation if approved
-    const result = await updatePaymentStatus(submission._id, "paid");
-
-    if (result.success) {
-      // Update subscription details - this is the ONLY place we patch Sanity
-      await backendClient
-        .patch(submission._id)
-        .set({
-          stripeCustomerId: session.customer,
-          stripeSubscriptionId: session.subscription,
-          lastPaymentDate: new Date().toISOString(),
-          currentPeriodEnd: new Date(
-            Date.now() +
-              (submission.billingCycle === "yearly" ? 365 : 30) *
-                24 *
-                60 *
-                60 *
-                1000
-          ).toISOString(),
-        })
-        .commit();
-
-      // Send payment confirmation
-      await sendPaymentConfirmation(submission);
-
-      console.log(`Payment processed for: ${submission.companyName}`);
+    // Retrieve the submission from Sanity using metadata
+    const submission = await backendClient.getDocument(metadata.companyId);
+    if (!submission) {
+      console.error(
+        `Company submission not found for ID: ${metadata.companyId}`
+      );
+      return;
     }
+
+    // Update payment status in Sanity (assumes this triggers logic like status change)
+    const updateResult = await updatePaymentStatus(submission._id, "paid");
+    if (!updateResult.success) {
+      console.error("Failed to update payment status in Sanity");
+      return;
+    }
+
+    // Determine current period end (prefer Stripe's subscription data if available)
+    let currentPeriodEnd = new Date();
+    if (session.subscription && typeof session.subscription === "object") {
+      // If you expanded the session.subscription object in webhook settings
+      currentPeriodEnd = new Date(
+        session.subscription.current_period_end * 1000
+      );
+    } else {
+      // Fallback: approximate period end manually
+      const days = submission.billingCycle === "yearly" ? 365 : 30;
+      currentPeriodEnd = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    }
+
+    // Patch Sanity with Stripe details
+    await backendClient
+      .patch(submission._id)
+      .set({
+        stripeCustomerId: session.customer,
+        stripeSubscriptionId: session.subscription,
+        lastPaymentDate: new Date().toISOString(),
+        currentPeriodEnd: currentPeriodEnd.toISOString(),
+      })
+      .commit();
+
+    // Send confirmation email
+    await sendPaymentConfirmation(submission);
+
+    console.log(
+      `✅ Payment completed and processed for: ${submission.companyName}`
+    );
   } catch (error) {
-    console.error("Error handling checkout session completed:", error);
+    console.error(
+      "❌ Error handling checkout.session.completed:",
+      error.message,
+      error
+    );
   }
 }
 
