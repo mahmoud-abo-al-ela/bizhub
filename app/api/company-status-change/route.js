@@ -130,13 +130,15 @@ export async function POST(req) {
         );
       }
 
-      // Send appropriate notification
-      if (status === "approved") {
+      // Send appropriate notification with guard clause to prevent duplicates
+      if (status === "approved" && !applicationData.approvalEmailSent) {
         console.log("Sending approval notification");
         await sendApprovalNotification(applicationData);
-      } else if (status === "rejected") {
+      } else if (status === "rejected" && !applicationData.rejectionEmailSent) {
         console.log("Sending rejection notification");
         await sendRejectionNotification(applicationData);
+      } else {
+        console.log(`Email already sent for ${status} status`);
       }
 
       return NextResponse.json({
@@ -197,11 +199,15 @@ export async function POST(req) {
         );
       }
 
-      // Send appropriate notification
-      if (status === "approved") {
+      // Send appropriate notification with guard clause to prevent duplicates
+      if (status === "approved" && !company.approvalEmailSent) {
+        console.log("Sending approval notification");
         await sendApprovalNotification(company);
-      } else if (status === "rejected") {
+      } else if (status === "rejected" && !company.rejectionEmailSent) {
+        console.log("Sending rejection notification");
         await sendRejectionNotification(company);
+      } else {
+        console.log(`Email already sent for ${status} status`);
       }
 
       return NextResponse.json({

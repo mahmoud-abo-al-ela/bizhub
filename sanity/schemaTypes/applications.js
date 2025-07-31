@@ -183,6 +183,22 @@ export default {
       description: "Reference to the company created from this application",
       readOnly: true, // Auto-managed by the system
     },
+    {
+      name: "approvalEmailSent",
+      title: "Approval Email Sent",
+      type: "boolean",
+      description: "Whether approval notification email has been sent",
+      initialValue: false,
+      readOnly: true, // Auto-managed by the system
+    },
+    {
+      name: "rejectionEmailSent",
+      title: "Rejection Email Sent",
+      type: "boolean",
+      description: "Whether rejection notification email has been sent",
+      initialValue: false,
+      readOnly: true, // Auto-managed by the system
+    },
   ],
   preview: {
     select: {
