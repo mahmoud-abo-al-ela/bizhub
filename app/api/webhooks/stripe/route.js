@@ -119,11 +119,10 @@ async function handleCheckoutSessionCompleted(session) {
     if (!metadata) return;
 
     // Find company submission in Sanity
-    const query = `*[_type == "applications" && email == $email && companyName == $companyName][0]`;
-    const submission = await backendClient.fetch(query, {
-      email: metadata.email,
-      companyName: metadata.companyName,
-    });
+    let submission = null;
+    if (metadata?.companyId) {
+      submission = await backendClient.getDocument(metadata.companyId);
+    }
 
     if (!submission) {
       console.error("Company submission not found in Sanity");
@@ -223,9 +222,20 @@ async function handleCustomerSubscriptionCreated(subscription) {
       return;
     }
 
-    // Find the company submission by Stripe customer ID
-    const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
-    const submission = await backendClient.fetch(query, { customerId });
+    let submission = null;
+
+    // Prefer companyId from metadata
+    if (subscription.metadata?.companyId) {
+      submission = await backendClient.getDocument(
+        subscription.metadata.companyId
+      );
+    }
+
+    // If not found by companyId, try to find by email
+    if (!submission) {
+      const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
+      submission = await backendClient.fetch(query, { customerId });
+    }
 
     if (!submission) {
       console.log(`No company submission found for customer: ${customerId}`);
@@ -265,9 +275,19 @@ async function handleCustomerSubscriptionUpdated(subscription) {
       return;
     }
 
-    // Find the company submission by Stripe customer ID
-    const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
-    const submission = await backendClient.fetch(query, { customerId });
+    let submission = null;
+
+    // Prefer companyId from metadata
+    if (subscription.metadata?.companyId) {
+      submission = await backendClient.getDocument(
+        subscription.metadata.companyId
+      );
+    }
+
+    if (!submission) {
+      const query = `*[_type == "applications" && stripeCustomerId == $customerId][0]`;
+      submission = await backendClient.fetch(query, { customerId });
+    }
 
     if (!submission) {
       console.log(`No company submission found for customer: ${customerId}`);

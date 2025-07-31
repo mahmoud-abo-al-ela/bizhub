@@ -26,8 +26,10 @@ export async function createPaymentLink(companyData) {
       );
     }
 
-    // Create a payment link
-    const paymentLink = await stripe.paymentLinks.create({
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "subscription",
       line_items: [
         {
           price: priceId,
@@ -41,17 +43,13 @@ export async function createPaymentLink(companyData) {
         planType: companyData.planType,
         billingCycle: companyData.billingCycle,
       },
-      after_completion: {
-        type: "redirect",
-        redirect: {
-          url: `${baseUrl}/join-us/payment-success?company_id=${companyData._id}`,
-        },
-      },
+      success_url: `${baseUrl}/join-us/payment-success?company_id=${companyData._id}`,
+      cancel_url: `${baseUrl}/join-us/payment-cancelled`,
     });
 
-    return { url: paymentLink.url };
+    return { url: session.url };
   } catch (error) {
-    console.error("Error creating payment link:", error);
+    console.error("Error creating checkout session:", error);
     throw error;
   }
 }
