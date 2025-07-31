@@ -114,7 +114,11 @@ export async function POST(req) {
       );
 
       // Handle status change - this will create company for free plans automatically
-      const statusResult = await updateSubmissionStatus(documentId, status);
+      const statusResult = await updateSubmissionStatus(
+        documentId,
+        status,
+        false
+      );
 
       if (!statusResult.success) {
         console.error(
@@ -185,7 +189,11 @@ export async function POST(req) {
       );
 
       // Handle status change - this will create company for free plans automatically
-      const statusResult = await updateSubmissionStatus(companyId, status);
+      const statusResult = await updateSubmissionStatus(
+        companyId,
+        status,
+        false
+      );
 
       if (!statusResult.success) {
         return NextResponse.json(
