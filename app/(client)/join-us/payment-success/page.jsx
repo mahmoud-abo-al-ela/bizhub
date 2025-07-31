@@ -167,7 +167,17 @@ function PaymentSuccessContent() {
                 <div className="font-medium">{amountLabel}</div>
 
                 <div className="text-gray-600">Status:</div>
-                <div className="font-medium text-green-600">Active</div>
+                <div className="font-medium text-green-600">
+                  {companyInfo?.subscriptionStatus ||
+                    paymentInfo?.subscription?.status ||
+                    "Active"}
+                </div>
+
+                <div className="text-gray-600">Subscription ID:</div>
+                <div className="font-medium text-xs break-all">
+                  {companyInfo?.stripeSubscriptionId ||
+                    paymentInfo?.subscription}
+                </div>
               </div>
             </div>
 
