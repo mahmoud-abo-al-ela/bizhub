@@ -82,7 +82,9 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     // Get the company submission
     const submission = await backendClient.getDocument(companyId);
     if (!submission) {
-      console.error(`Company submission not found: ${companyId}`);
+      console.error(
+        `Company submission not found: ${companyId} from payment intent succeeded`
+      );
       return;
     }
 
@@ -143,7 +145,7 @@ async function handleCheckoutSessionCompleted(session) {
     const submission = await backendClient.getDocument(metadata.companyId);
     if (!submission) {
       console.error(
-        `Company submission not found for ID: ${metadata.companyId}`
+        `Company submission not found for ID: ${metadata.companyId} from checkout session completed`
       );
       return;
     }
@@ -211,7 +213,9 @@ async function handleInvoicePaymentSucceeded(invoice) {
     const submission = await backendClient.fetch(query, { customerId });
 
     if (!submission) {
-      console.log(`No company submission found for customer: ${customerId}`);
+      console.log(
+        `No company submission found for customer: ${customerId} from invoice payment`
+      );
       return;
     }
 
@@ -279,7 +283,9 @@ async function handleCustomerSubscriptionCreated(subscription) {
     }
 
     if (!submission) {
-      console.log(`No company submission found for customer: ${customerId}`);
+      console.log(
+        `No company submission found for customer: ${customerId} from subscription created`
+      );
       return;
     }
 
@@ -339,7 +345,9 @@ async function handleCustomerSubscriptionUpdated(subscription) {
     }
 
     if (!submission) {
-      console.log(`No company submission found for customer: ${customerId}`);
+      console.log(
+        `No company submission found for customer: ${customerId} from subscription updated`
+      );
       return;
     }
 
