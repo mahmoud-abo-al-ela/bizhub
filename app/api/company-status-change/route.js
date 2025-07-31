@@ -54,6 +54,18 @@ export async function POST(req) {
         );
       }
 
+      // For delete operations, we can't fetch the document
+      if (
+        body.operation === "delete" ||
+        body.ids?.deleted?.includes(documentId)
+      ) {
+        console.log("Document deletion detected, no further action needed");
+        return NextResponse.json({
+          success: true,
+          message: "Document deletion acknowledged",
+        });
+      }
+
       // Fetch the complete application data from Sanity
       console.log("Fetching document from Sanity:", documentId);
       const applicationData = await backendClient.getDocument(documentId);
@@ -101,8 +113,24 @@ export async function POST(req) {
         `Status changed to ${status} for ${companyName} (${planType || "free"} plan) via webhook`
       );
 
-      // No need to update status again since it was already updated in Sanity
-      // Just handle notifications
+      // Handle status change - this will create company for free plans automatically
+      const statusResult = await updateSubmissionStatus(documentId, status);
+
+      if (!statusResult.success) {
+        console.error(
+          "Failed to update submission status:",
+          statusResult.message
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            message: statusResult.message,
+          },
+          { status: 400 }
+        );
+      }
+
+      // Send appropriate notification
       if (status === "approved") {
         console.log("Sending approval notification");
         await sendApprovalNotification(applicationData);
@@ -113,7 +141,9 @@ export async function POST(req) {
 
       return NextResponse.json({
         success: true,
-        message: "Webhook processed and notification sent",
+        message: "Webhook processed, status updated, and notification sent",
+        companyId: statusResult.companyId,
+        companyCreated: !!statusResult.companyId,
       });
     }
     // Handle manual API calls with the original format
