@@ -1,12 +1,13 @@
 "use server";
 
 import stripe from "@/lib/stripe";
+import { backendClient } from "@/sanity/lib/backendClient";
 
 export async function createPaymentLink(companyData) {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 
-    // Determine price ID based on plan type and billing cycle
+    // 1. Determine price ID based on plan type and billing cycle
     let priceId;
     if (companyData.planType === "professional") {
       priceId =
@@ -26,10 +27,26 @@ export async function createPaymentLink(companyData) {
       );
     }
 
-    // Create Stripe Checkout Session
+    // 2. Create a Stripe Customer (if not already assigned)
+    const customer = await stripe.customers.create({
+      email: companyData.email,
+      name: companyData.companyName,
+      metadata: {
+        companyId: companyData._id,
+      },
+    });
+
+    // 3. Store customerId in Sanity
+    await backendClient
+      .patch(companyData._id)
+      .set({ stripeCustomerId: customer.id })
+      .commit();
+
+    // 4. Create Checkout Session linked to customer
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "subscription",
+      customer: customer.id, // ✅ Link to Stripe customer
       line_items: [
         {
           price: priceId,
