@@ -54,18 +54,6 @@ export async function POST(req) {
         );
       }
 
-      // For delete operations, we can't fetch the document
-      if (
-        body.operation === "delete" ||
-        body.ids?.deleted?.includes(documentId)
-      ) {
-        console.log("Document deletion detected, no further action needed");
-        return NextResponse.json({
-          success: true,
-          message: "Document deletion acknowledged",
-        });
-      }
-
       // Fetch the complete application data from Sanity
       console.log("Fetching document from Sanity:", documentId);
       const applicationData = await backendClient.getDocument(documentId);
