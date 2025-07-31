@@ -205,34 +205,40 @@ async function handleCheckoutSessionCompleted(session) {
 
     // For subscription mode, get subscription details
     if (session.mode === "subscription" && session.subscription) {
-      try {
-        // Store subscription ID as fallback
-        patchData.stripeSubscriptionId = session.subscription;
-        patchData.subscriptionStatus = "active";
+      // Always set the subscription ID from the session
+      patchData.stripeSubscriptionId = session.subscription;
+      patchData.subscriptionStatus = "active"; // Default to active for completed checkout
 
-        // Try to get full details
+      try {
+        // Try to get full details from Stripe
         const stripeSub = await stripe.subscriptions.retrieve(
           session.subscription
         );
-        patchData.stripeSubscriptionId = stripeSub.id;
         patchData.subscriptionStatus = stripeSub.status;
         patchData.currentPeriodEnd = new Date(
           stripeSub.current_period_end * 1000
         ).toISOString();
+        console.log(
+          `Retrieved subscription details: ${stripeSub.id}, status: ${stripeSub.status}`
+        );
       } catch (error) {
         console.error(
           `Error retrieving subscription details: ${error.message}`
         );
 
-        // Set default period end if needed
-        if (!patchData.currentPeriodEnd) {
-          const days = submission.billingCycle === "yearly" ? 365 : 30;
-          patchData.currentPeriodEnd = new Date(
-            Date.now() + days * 86400000
-          ).toISOString();
-        }
+        // Set default period end if we couldn't get it from Stripe
+        const days = submission.billingCycle === "yearly" ? 365 : 30;
+        patchData.currentPeriodEnd = new Date(
+          Date.now() + days * 86400000
+        ).toISOString();
+
+        console.log(
+          `Using fallback subscription data for: ${session.subscription}`
+        );
       }
     }
+
+    console.log(`Patching submission with data:`, patchData);
 
     // Apply the patch
     await backendClient.patch(submission._id).set(patchData).commit();
