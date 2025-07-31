@@ -58,6 +58,15 @@ export async function POST(req) {
   }
 }
 
+// Helper function to check if a submission has a valid stripeCustomerId
+async function hasValidStripeCustomerId(submission) {
+  return (
+    submission &&
+    submission.stripeCustomerId &&
+    submission.stripeCustomerId.trim() !== ""
+  );
+}
+
 // Handle successful payment from payment link
 async function handlePaymentIntentSucceeded(paymentIntent) {
   try {
@@ -74,6 +83,14 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
     const submission = await backendClient.getDocument(companyId);
     if (!submission) {
       console.error(`Company submission not found: ${companyId}`);
+      return;
+    }
+
+    // Check if stripeCustomerId is already linked - if not, ignore this event
+    if (!(await hasValidStripeCustomerId(submission))) {
+      console.log(
+        `Ignoring payment_intent.succeeded - stripeCustomerId not yet linked for: ${companyId}`
+      );
       return;
     }
 
@@ -110,7 +127,7 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
   }
 }
 
-// Handle successful checkout session
+// Handle successful checkout session - ONLY this event patches Sanity
 async function handleCheckoutSessionCompleted(session) {
   try {
     if (session.mode !== "payment" && session.mode !== "subscription") return;
@@ -133,7 +150,7 @@ async function handleCheckoutSessionCompleted(session) {
     const result = await updatePaymentStatus(submission._id, "paid");
 
     if (result.success) {
-      // Update subscription details
+      // Update subscription details - this is the ONLY place we patch Sanity
       await backendClient
         .patch(submission._id)
         .set({
@@ -179,6 +196,14 @@ async function handleInvoicePaymentSucceeded(invoice) {
 
     if (!submission) {
       console.log(`No company submission found for customer: ${customerId}`);
+      return;
+    }
+
+    // Check if stripeCustomerId is already linked - if not, ignore this event
+    if (!(await hasValidStripeCustomerId(submission))) {
+      console.log(
+        `Ignoring invoice.payment_succeeded - stripeCustomerId not yet linked for customer: ${customerId}`
+      );
       return;
     }
 
@@ -242,6 +267,14 @@ async function handleCustomerSubscriptionCreated(subscription) {
       return;
     }
 
+    // Check if stripeCustomerId is already linked - if not, ignore this event
+    if (!(await hasValidStripeCustomerId(submission))) {
+      console.log(
+        `Ignoring customer.subscription.created - stripeCustomerId not yet linked for customer: ${customerId}`
+      );
+      return;
+    }
+
     console.log(
       `Found submission for subscription created: ${submission.companyName}`
     );
@@ -291,6 +324,14 @@ async function handleCustomerSubscriptionUpdated(subscription) {
 
     if (!submission) {
       console.log(`No company submission found for customer: ${customerId}`);
+      return;
+    }
+
+    // Check if stripeCustomerId is already linked - if not, ignore this event
+    if (!(await hasValidStripeCustomerId(submission))) {
+      console.log(
+        `Ignoring customer.subscription.updated - stripeCustomerId not yet linked for customer: ${customerId}`
+      );
       return;
     }
 
