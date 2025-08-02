@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
-import Link from "next/link";
 
 export default function CompanyCard({ company }) {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -14,6 +12,7 @@ export default function CompanyCard({ company }) {
     setIsFlipped(!isFlipped);
   };
 
+  console.log(company);
   return (
     <div
       className="relative h-[320px] w-full perspective-1000 group cursor-pointer"

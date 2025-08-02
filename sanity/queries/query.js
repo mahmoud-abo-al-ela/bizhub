@@ -7,11 +7,7 @@ const COMPANIES_QUERY =
   companyName,
   slug,
   description,
-  services[]->{
-    _id,
-    name,
-    slug
-  },
+  services[],
   logo,
   website,
   featured,
@@ -27,11 +23,7 @@ const FEATURED_COMPANIES_QUERY =
   companyName,
   slug,
   description,
-  services[]->{
-    _id,
-    name,
-    slug
-  },
+  services[],
   logo,
   website,
   featured,
@@ -47,13 +39,7 @@ const COMPANY_BY_SLUG_QUERY =
   companyName,
   slug,
   description,
-  services[]->{
-    _id,
-    name,
-    slug,
-    description,
-    icon
-  },
+  services[],
   logo,
   website,
   location,
@@ -83,10 +69,7 @@ const APPROVED_COMPANIES_QUERY = defineQuery(`*[_type == "company"] {
   _id,
   companyName,
   description,
-  services[]->{
-    _id,
-    name
-  },
+  services[],
   logo
 }`);
 
